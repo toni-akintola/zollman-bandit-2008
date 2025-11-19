@@ -30,35 +30,70 @@ def generateInitialData(model: AgentModel):
     return {**initial_data, **expectations}
 
 
-# --- Unified Timestep Data Generation Function ---
+# --- Unified Timestep Data Generation Function (With Social Learning) ---
 def generateTimestepData(model: AgentModel):
-
     graph = model.get_graph()
 
     num_trials = model["num_trials_per_step"]
     a_objective = model["a_objective"]
     b_objective = model["b_objective"]
 
-    for _node, node_data in graph.nodes(data=True):
+    # Temporary storage for what happened this turn
+    # Structure: { node_id: { "arm": "a" or "b", "successes": int, "failures": int } }
+    step_results = {}
+
+    # --- PHASE 1: ACTION (Everyone acts based on current beliefs) ---
+    for node_id, node_data in graph.nodes(data=True):
+        # Greedy Decision
         if node_data["a_expectation"] > node_data["b_expectation"]:
-            successes = int(np.random.binomial(num_trials, a_objective, size=None))
-            node_data["a_alpha"] += successes
-            node_data["a_beta"] += max(0, num_trials - successes)
-            a_denom = node_data["a_alpha"] + node_data["a_beta"]
-            node_data["a_expectation"] = (
-                node_data["a_alpha"] / a_denom if a_denom > 0 else 0
-            )
+            chosen_arm = "a"
+            objective = a_objective
         else:
-            successes = int(np.random.binomial(num_trials, b_objective, size=None))
-            node_data["b_alpha"] += successes
-            node_data["b_beta"] += max(0, num_trials - successes)
-            b_denom = node_data["b_alpha"] + node_data["b_beta"]
-            node_data["b_expectation"] = (
-                node_data["b_alpha"] / b_denom if b_denom > 0 else 0
-            )
+            chosen_arm = "b"
+            objective = b_objective
+
+        # Run Trials
+        successes = int(np.random.binomial(num_trials, objective))
+        failures = max(0, num_trials - successes)
+
+        # Record the visible outcome
+        step_results[node_id] = {
+            "arm": chosen_arm,
+            "successes": successes,
+            "failures": failures
+        }
+
+    # --- PHASE 2: SOCIAL LEARNING (Everyone updates based on self + neighbors) ---
+    for node_id, node_data in graph.nodes(data=True):
+        
+        # 1. Identify who to learn from: Self + Neighbors
+        # We use list(graph.neighbors(node_id)) to get connected nodes
+        sources = [node_id] + list(graph.neighbors(node_id))
+
+        # 2. Absorb data from all sources
+        for source_id in sources:
+            result = step_results[source_id]
+            
+            if result["arm"] == "a":
+                node_data["a_alpha"] += result["successes"]
+                node_data["a_beta"]  += result["failures"]
+            else:
+                # Result was on arm B
+                node_data["b_alpha"] += result["successes"]
+                node_data["b_beta"]  += result["failures"]
+
+        # 3. Recalculate Expectations based on new total data
+        a_denom = node_data["a_alpha"] + node_data["a_beta"]
+        node_data["a_expectation"] = (
+            node_data["a_alpha"] / a_denom if a_denom > 0 else 0
+        )
+
+        b_denom = node_data["b_alpha"] + node_data["b_beta"]
+        node_data["b_expectation"] = (
+            node_data["b_alpha"] / b_denom if b_denom > 0 else 0
+        )
 
     model.set_graph(graph)
-
 
 # --- Model Construction ---
 def constructModel() -> AgentModel:
