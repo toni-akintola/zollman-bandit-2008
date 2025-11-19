@@ -28,7 +28,6 @@ def generateInitialData(model: AgentModel):
     }
     initial_data.update(expectations)
     return initial_data
-    
 
 
 # --- Unified Timestep Data Generation Function ---
@@ -78,7 +77,6 @@ def constructModel() -> AgentModel:
         }
     )
 
-
     # Set the unified functions
     model.set_initial_data_function(generateInitialData)
     model.set_timestep_function(generateTimestepData)
@@ -89,4 +87,3 @@ def constructModel() -> AgentModel:
 if __name__ == "__main__":
     model = constructModel()
     model.initialize_graph()
-    print(model.get_graph().nodes(data=True))
