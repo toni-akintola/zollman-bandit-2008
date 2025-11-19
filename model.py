@@ -26,8 +26,8 @@ def generateInitialData(model: AgentModel):
         "a_expectation": initial_data["a_alpha"] / a_denom if a_denom > 0 else 0,
         "b_expectation": initial_data["b_alpha"] / b_denom if b_denom > 0 else 0,
     }
-    initial_data.update(expectations)
-    return initial_data
+    
+    return {**initial_data, **expectations}
 
 
 # --- Unified Timestep Data Generation Function ---
